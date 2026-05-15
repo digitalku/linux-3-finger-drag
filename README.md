@@ -251,11 +251,11 @@ If that text isn't in the note, you may be missing the basic C/C++ developer too
 
 #### For GNOME users
 
-- set auto start
+- after reboot, try 3 finger to drag, if cant run. you can use this promp
 ```
 systemctl --user enable --now three-finger-drag.service
 ```
-- instal swap 3 finger to 4 finger gesture (tested on gnome 50) https://extensions.gnome.org/extension/5233/swap-finger-gestures-3-to-4/
+- instal swap 3 finger to 4 finger gesture remastered (tested on gnome 50) https://extensions.gnome.org/extension/9646/swap-finger-gestures-3-to-4/
 - disable double tap to drag
 ```
 gsettings set org.gnome.desktop.peripherals.touchpad tap-and-drag false
