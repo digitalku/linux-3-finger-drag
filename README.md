@@ -7,7 +7,11 @@ OS | Version | Desktop Enviroment | Verified
 ---|---|---|---
 **Kubuntu** | 24.10 | KDE Plasma 6 | ✅ <sup>1</sup>
 **Arch** | (kernel 6.15.4) | KDE | ✅
+**Fedora** | (kernel 6) | Gnome | ✅
+**Fedora** | (kernel 6) | KDE | ❌
+**Ubuntu** | (kernel 7) | Gnome | ✅
 
+KDE Problem: can't disable kde's default 3 finger drag to switch workspaces
 ---
 <sup>1</sup> Developed on this setup.
 
@@ -247,7 +251,15 @@ If that text isn't in the note, you may be missing the basic C/C++ developer too
 
 #### For GNOME users
 
-GNOME users will need to install the Window Gestures Shell Extension. Once installed, you'll be able to change the finger number for swipe gestures from your settings. You can get it from either the [GNOME Extensions website](https://extensions.gnome.org/extension/6343/window-gestures/) or the [GitHub repository](https://github.com/amarullz/windowgestures). Once installed, disable all three finger gestures. 
+- set auto start
+```
+systemctl --user enable --now three-finger-drag.service
+```
+- instal swap 3 finger to 4 finger gesture (tested on gnome 50) https://extensions.gnome.org/extension/5233/swap-finger-gestures-3-to-4/
+- disable double tap to drag
+```
+gsettings set org.gnome.desktop.peripherals.touchpad tap-and-drag false
+```
 
 #### For `libinput-gestures` (if needed)
 
