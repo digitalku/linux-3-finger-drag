@@ -30,6 +30,7 @@ KDE Problem: can't disable kde's default 3 finger drag to switch workspaces
   - [Step 6 — Reboot](#6-reboot)
   - [Step 7 — Add to KDE Autostart](#7-add-program-to-autostart-kde-only)
   - [Step 7b — Set up as `systemd` user unit](#7b-add-program-to-systemd-works-distro-and-desktop-agnostic)
+- [Uninstalling](#uninstalling)
 - [Configuration](#configuration)
   - [Set up](#Set-up-configuration)
   - [acceleration](#acceleration-float)
@@ -97,7 +98,7 @@ sudo zypper install libinput-devel
 
 ### 2. Clone the repository
 ```
-git clone https://github.com/lmr97/linux-3-finger-drag.git
+git clone https://github.com/digitalku/linux-3-finger-drag.git
 cd linux-3-finger-drag
 ```
 
@@ -176,6 +177,36 @@ systemctl --user enable --now three-finger-drag.service
 ```
 
 ### You did it! Now you can 3-finger-drag!
+
+
+## Uninstalling
+
+`uninstall.sh` reverses everything `install.sh` put on the system: the
+systemd user unit, the binary in `/usr/bin`, the udev rule, the `uinput`
+module-load config, and your config directory.
+
+```
+sudo ./uninstall.sh
+```
+
+| flag | effect |
+|---|---|
+| `--keep-config` | leave `~/.config/linux-3-finger-drag` in place |
+| `--remove-group` | also drop your `input` group membership |
+
+Your `input` group membership is **left alone by default**. Other input
+tools (gesture daemons, key remappers, emulators) commonly need that
+group too, and removing it breaks them silently — opt in only if this
+program was the reason you joined it.
+
+Two system files are only deleted if they still look like the ones
+`install.sh` wrote: `/etc/udev/rules.d/60-uinput.rules` is compared
+against this repo's copy, and `/etc/modules-load.d/uinput.conf` must
+still be a lone `uinput` line. If either has changed, the script says so
+and leaves it alone rather than breaking something else that claimed it.
+
+The trackpad returns to its normal behaviour immediately — no reboot
+needed.
 
 
 ## Configuration
