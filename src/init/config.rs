@@ -1,6 +1,5 @@
 use serde::Deserialize;
 use serde_json::from_str;
-use serde_with::serde_as;
 use std::{
     fs::{File, read_to_string, OpenOptions}, 
     io::ErrorKind, 
@@ -24,9 +23,9 @@ pub enum LogLevel { OFF, ERROR, WARN, INFO, DEBUG, TRACE }
 
 // we had to have a wrapper for simplelog::LevelFilter for deserializing, 
 // now we gotta make that wrapper useful in the program
-impl Into<LevelFilter> for LogLevel {
-    fn into(self) -> LevelFilter {
-        match self {
+impl From<LogLevel> for LevelFilter {
+    fn from(level: LogLevel) -> Self {
+        match level {
             LogLevel::OFF   => LevelFilter::OFF,
             LogLevel::ERROR => LevelFilter::ERROR,
             LogLevel::WARN  => LevelFilter::WARN,
@@ -81,6 +80,39 @@ fn default_0ms()    -> Duration { Duration::from_millis(0) }
 fn default_5ms()    -> Duration { Duration::from_millis(5) }
 fn default_stdout() -> String   { "stdout".to_string() }
 fn default_info()   -> LogLevel { LogLevel::INFO }
+
+
+impl Configuration {
+    /// Replace values that would break the program with their defaults, 
+    /// warning about each one. Like a missing config file, a bad value 
+    /// shouldn't stop the program.
+    fn validated(mut self) -> Self {
+        let defaults = Configuration::default();
+
+        // 0 would freeze the cursor during a drag, and negative values 
+        // would move it the opposite way
+        if !(self.acceleration.is_finite() && self.acceleration > 0.0) {
+            println!(
+                "[PRE-LOG: WARNING]: acceleration must be greater than 0 \
+                (got {}), so the default of {} is used instead.",
+                self.acceleration, defaults.acceleration
+            );
+            self.acceleration = defaults.acceleration;
+        }
+
+        // without any wait, the main loop keeps a whole CPU core busy
+        if self.response_time.is_zero() {
+            println!(
+                "[PRE-LOG: WARNING]: responseTime must be at least 1 (ms), \
+                so the default of {} is used instead.",
+                defaults.response_time.as_millis()
+            );
+            self.response_time = defaults.response_time;
+        }
+
+        self
+    }
+}
 
 
 pub fn get_config_file_path() -> Result<PathBuf, std::io::Error> {
@@ -152,7 +184,8 @@ pub fn init_cfg() -> Configuration {
     println!("[PRE-LOG: INFO]: Loading configuration...");
     let configs = match parse_config_file() {
         Ok(cfg) => {
-            println!("[PRE-LOG: INFO]: Successfully loaded your configuration (with defaults for unspecified values): \n{:#?}", &cfg);
+            let cfg = cfg.validated();
+            println!("[PRE-LOG: INFO]: Successfully loaded your configuration (with defaults for unspecified values): \n{:#?}", cfg);
             cfg
         },
         Err(err) => {
@@ -203,6 +236,35 @@ pub fn init_file_logger(cfg: Configuration) -> Option<SubscriberBuilder<DefaultF
             );
             println!("[PRE-LOG: WARN]: Logging to stdout at {log_level}-level verbosity.");
             None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_values_are_kept() {
+        let cfg = from_str::<Configuration>(
+            r#"{ "acceleration": 2.5, "responseTime": 10 }"#
+        ).unwrap().validated();
+
+        assert_eq!(cfg.acceleration, 2.5);
+        assert_eq!(cfg.response_time, Duration::from_millis(10));
+    }
+
+    #[test]
+    fn invalid_values_fall_back_to_defaults() {
+        let defaults = Configuration::default();
+
+        for accel in ["0", "-1.5"] {
+            let cfg = from_str::<Configuration>(
+                &format!(r#"{{ "acceleration": {accel}, "responseTime": 0 }}"#)
+            ).unwrap().validated();
+
+            assert_eq!(cfg.acceleration, defaults.acceleration);
+            assert_eq!(cfg.response_time, defaults.response_time);
         }
     }
 }

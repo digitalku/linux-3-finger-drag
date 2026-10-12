@@ -45,17 +45,17 @@ async fn main() -> Result<(), GtError> {
 
     // handling SIGINT and SIGTERM
     let should_exit = Arc::new(AtomicBool::new(false));
-    flag::register(SIGTERM, Arc::clone(&should_exit)).unwrap();
-    flag::register(SIGINT,  Arc::clone(&should_exit)).unwrap();
+    flag::register(SIGTERM, Arc::clone(&should_exit))?;
+    flag::register(SIGINT,  Arc::clone(&should_exit))?;
 
     let (sender, recvr) = mpsc::channel::<ControlSignal>(3);
-    let mut vtrackpad = virtual_trackpad::start_handler()?;
+    let vtrackpad = virtual_trackpad::start_handler()?;
 
     info!("Searching for the trackpad on your device...");
 
     info!("end evdev search");
-    // using a match case here instead of a `?` here so the program can destruct 
-    // the virtual trackpad before it exits
+    // using a match case here instead of a `?` here so the program can log
+    // its cleanup before it exits
     let main_result = match libinput_init::find_real_trackpads() {
 
         Ok(real_trackpad) => {
@@ -79,9 +79,10 @@ async fn main() -> Result<(), GtError> {
 
     // the program arrives here if either a signal is received, 
     // or there was some issue during initialization
+    // Dropping the last handle to the virtual trackpad releases the mouse
+    // button (if it's still down) and destroys the device.
     info!("Cleaning up and exiting...");
-    vtrackpad.mouse_up()?;      // just in case
-    vtrackpad.destruct()?;      // we don't need virtual devices cluttering the system
+    drop(vtrackpad);
     
     info!("Clean up successful.");
     main_result
@@ -105,7 +106,7 @@ async fn run_main_event_loop(
     // (the delay itself is sent along with each `RestartTimer` signal,
     // so it stays in sync with the config when that is reloaded)
     debug!("Creating new thread to manage drag end timer");
-    let mut vtp_clone = translator.vtp.clone();
+    let vtp_clone = translator.vtp.clone();
 
     let fork_fn = async move {
         vtp_clone.handle_mouse_up_timeout(recvr)
@@ -164,9 +165,9 @@ async fn run_main_event_loop(
             // the value the thread returns is a `Result`, so the this extracts 
             // the Result from the fork and returns it.
             if mouse_up_listener.is_finished() {
-                let fork_err = mouse_up_listener.await?.unwrap_err();
-                error!("Error raised in fork: {:?}", fork_err);
-                return Err(fork_err);
+                let fork_result = mouse_up_listener.await?;
+                error!("Drag end timer stopped unexpectedly: {:?}", fork_result);
+                return fork_result;
             }
         }
     };

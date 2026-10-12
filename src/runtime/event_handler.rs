@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-//use smol::{channel::{RecvError, SendError, Sender}};
 use tokio::sync::mpsc::{error::SendError, Sender};
 use input::{
     event::{
@@ -25,8 +24,6 @@ use super::super::init::config::Configuration;
 /// when the mouse hold is released. Here's what each signal
 /// means in more detail:
 /// 
-/// `CancelTimer`: Cancel the timer, and release drag inside fork
-/// 
 /// `CancelMouseUp`: Cancel timer, and don't do anything else in the fork (await next signal)
 /// 
 /// `RestartTimer`: Restart timer by restarting the loop in the fork that starts with a timer.
@@ -35,9 +32,8 @@ use super::super::init::config::Configuration;
 /// `TerminateThread`: Terminate function running in fork
 #[derive(Debug)]
 pub enum ControlSignal {
-    CancelTimer,      // currently not sent in practice, but could be without issue
     CancelMouseUp,
-    RestartTimer(Duration),     // these two end up being treated the same in practice,
+    RestartTimer(Duration),
     TerminateThread
 }
 
@@ -192,6 +188,14 @@ impl GestureTranslator {
     /// The left click is released here, not in the fork when the 
     /// timer is running to cut down on latency.
     async fn mouse_up_now(&mut self) -> Result<(), GtError> {
+
+        // Every ordinary pointer event ends up here, so skip the work when 
+        // there's no drag to end. The delay timer only runs while the 
+        // button is down, so there's no timer to cancel either.
+        if !self.vtp.is_mouse_down() {
+            return Ok(());
+        }
+
         trace!("Cancelling timer, ending drag immediately");
         self.send_signal(ControlSignal::CancelMouseUp).await?;
         Ok(self.vtp.mouse_up()?)

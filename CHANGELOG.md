@@ -10,12 +10,20 @@
 
 - `install.sh` keeps an existing config file instead of overwriting it
 - `install.sh` installs the binary with `install` (root-owned, and works while the old version is running), restarts the service, and only asks to reboot when the user was newly added to the `input` group
+- Invalid `acceleration` (0 or less) and `responseTime` (0) values are replaced with their defaults, with a warning
+- Ordinary pointer events no longer write a button release to the virtual trackpad when no drag is in progress
+- The virtual trackpad is released and destroyed on every way out of the program, and setup errors are reported instead of panicking
+
+### Removed
+
+- Remove unused `CancelTimer` signal, `mouse_up_delay_blocking()`, and the `criterion` dev-dependency
 
 ### Fixed
 
 - Fix slow drags not moving the cursor: sub-pixel motion is now carried over to the next event instead of being dropped
 - Fix crash on startup (or while running) when the config file doesn't exist, or is briefly missing while being saved
 - Fix hot-reloaded `dragEndDelay` values being ignored until restart
+- Fix the libinput device open check, which could never detect read-only (`O_RDONLY`) access
 
 ## 1.6.0 - 2025-11-24
 

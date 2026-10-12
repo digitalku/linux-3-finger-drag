@@ -1,5 +1,5 @@
 use std::io::{Error, ErrorKind};
-use nix::libc::{O_RDONLY, O_RDWR, O_WRONLY};
+use nix::libc::{EIO, O_ACCMODE, O_RDONLY, O_RDWR, O_WRONLY};
 use std::fs::{File, OpenOptions};
 use std::os::unix::{fs::OpenOptionsExt, io::OwnedFd};
 use std::path::Path;
@@ -17,13 +17,16 @@ pub struct Interface;
 
 impl LibinputInterface for Interface {
     fn open_restricted(&mut self, path: &Path, flags: i32) -> Result<OwnedFd, i32> {
+        // The access mode is a 2-bit value, not a set of flags: O_RDONLY 
+        // is 0, so it can't be tested for with a bitwise AND.
+        let access_mode = flags & O_ACCMODE;
         OpenOptions::new()
             .custom_flags(flags)
-            .read((flags & O_RDONLY != 0) | (flags & O_RDWR != 0))
-            .write((flags & O_WRONLY != 0) | (flags & O_RDWR != 0))
+            .read(access_mode == O_RDONLY || access_mode == O_RDWR)
+            .write(access_mode == O_WRONLY || access_mode == O_RDWR)
             .open(path)
             .map(|file| file.into())
-            .map_err(|err| err.raw_os_error().unwrap())
+            .map_err(|err| err.raw_os_error().unwrap_or(EIO))
     }
     fn close_restricted(&mut self, fd: OwnedFd) {
         drop(File::from(fd));
@@ -185,7 +188,10 @@ fn raise_correct_error(devices_added: u8) -> Result<Libinput, std::io::Error> {
 pub fn find_real_trackpads() -> Result<Libinput, std::io::Error> {
 
     let mut all_inputs: Libinput = Libinput::new_with_udev(Interface);
-    all_inputs.udev_assign_seat("seat0").unwrap();   // will not throw an error on failure!
+    // this only fails if udev itself can't be set up; failing to find
+    // devices on the seat is not reported (see `raise_correct_error()`)
+    all_inputs.udev_assign_seat("seat0")
+        .map_err(|_| Error::other("could not assign seat0 to libinput"))?;
 
     // Events added are dropped by the find() in the next statement, so they need to be 
     // counted beforehand. Cloning all_inputs and finding the length of the collected Vec
@@ -205,7 +211,7 @@ pub fn find_real_trackpads() -> Result<Libinput, std::io::Error> {
     ).map(|event| event.device())
     .collect();
 
-    if all_trackpads.len() == 0 { 
+    if all_trackpads.is_empty() { 
         return raise_correct_error(dev_added_count); 
     }
 

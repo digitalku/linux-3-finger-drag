@@ -264,7 +264,7 @@ If the JSON is malformed in the found configuration file, or the file is simply 
 The configuration values will be hot-reloaded when `3fd-config.json` is updated, except for logging configurations. A change to logging configuration values requires a restart of the program (currently; open to PRs on this). 
 
 ### `acceleration` (float)
-This is a speedup multiplier which will be applied to all 3-finger gesture movements. Defaults to `1.0`.
+This is a speedup multiplier which will be applied to all 3-finger gesture movements. It must be greater than 0; other values are replaced with the default. Defaults to `1.0`.
 
 
 ### `dragEndDelay` (int)
@@ -291,7 +291,7 @@ This allows for the user to control logging verbosity. This can be one of the fo
 For more info on what these levels are intended to capture, see the documentation for [the `enum` to which these values correspond](https://docs.rs/log/0.4.6/log/enum.Level.html). Note that `debug` and `trace` levels generate logs extremely rapidly, which both baloons the log file size (even after short periods of use), and consumes spikes CPU usage on fast, long gestures. Defaults to `"info"`.
 
 ### `responseTime` (int)
-This is the time (in milliseconds) that the main loop waits before fetching the next batch of events, the inverse of a refresh rate. Defaults to 5.
+This is the time (in milliseconds) that the main loop waits before fetching the next batch of events, the inverse of a refresh rate. It must be at least 1, since 0 would keep a CPU core busy; 0 is replaced with the default. Defaults to 5.
 
 ## How it works
 This program uses Rust bindings for libinput to detect three-finger gestures, and translates them into the right events to be written to [`/dev/uinput`](https://www.kernel.org/doc/html/v4.12/input/uinput.html) via a virtual trackpad. This gives the effect of three-finger dragging. This flow of control bypasses the display server layer entirely, which ensures compatability with any desktop environment.
