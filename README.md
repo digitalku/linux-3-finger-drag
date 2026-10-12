@@ -30,6 +30,7 @@ KDE Problem: can't disable kde's default 3 finger drag to switch workspaces
   - [Step 6 — Reboot](#6-reboot)
   - [Step 7 — Add to KDE Autostart](#7-add-program-to-autostart-kde-only)
   - [Step 7b — Set up as `systemd` user unit](#7b-add-program-to-systemd-works-distro-and-desktop-agnostic)
+- [Updating](#updating)
 - [Uninstalling](#uninstalling)
 - [Configuration](#configuration)
   - [Set up](#Set-up-configuration)
@@ -138,10 +139,10 @@ cargo build --release
 Once you've got it working, copy it into `/usr/bin` for ease and consistency of access:
 
 ```
-sudo cp --preserve=ownership ./target/release/linux-3-finger-drag /usr/bin
+sudo install -m 755 ./target/release/linux-3-finger-drag /usr/bin
 ```
 
-*Note*: the `--preserve=ownership` option is included so the executable is not run as root, but as you, the user. This keeps the program from being too privileged on your system.
+*Note*: the program runs as whoever starts it (you, through the user service), not as the owner of the file, so a root-owned binary is not more privileged. `install` is used rather than `cp` because it also works while an older version is still running.
 
 ### 6. Reboot
 
@@ -177,6 +178,33 @@ systemctl --user enable --now three-finger-drag.service
 ```
 
 ### You did it! Now you can 3-finger-drag!
+
+
+## Updating
+
+Once installed, `update.sh` brings the program up to date:
+
+```
+sudo ./update.sh
+```
+
+It pulls the latest changes (fast-forward only), rebuilds, replaces the
+binary in `/usr/bin`, and restarts the service. No reboot is needed, and
+your config file is never touched; new options simply take their default
+values until you set them.
+
+| flag | effect |
+|---|---|
+| `--no-pull` | build and install this checkout as it is, without fetching |
+
+The systemd user unit and `/etc/udev/rules.d/60-uinput.rules` are also
+refreshed when this repo's copies change, but only if your installed
+copies still match a version this repo shipped. If you edited them by
+hand, the script leaves them alone and tells you to merge the changes
+yourself.
+
+If the build fails, nothing is replaced and the installed version keeps
+running.
 
 
 ## Uninstalling

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Add `update.sh` to update an existing install: pulls, rebuilds, swaps the binary and restarts the service, without touching the config or needing a reboot
+
+### Changed
+
+- `install.sh` keeps an existing config file instead of overwriting it
+- `install.sh` installs the binary with `install` (root-owned, and works while the old version is running), restarts the service, and only asks to reboot when the user was newly added to the `input` group
+
 ### Fixed
 
 - Fix slow drags not moving the cursor: sub-pixel motion is now carried over to the next event instead of being dropped

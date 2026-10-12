@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 ###########################
 # linux-three-finger-drag #
 #   Installation Script   #
@@ -66,7 +67,7 @@ ensure-libinput() {
             INSTALL_CMD=${installCommand[${ID}]}
         fi
 
-        if [[ $INSTALL_CMD = "uncommon" || -z $SEARCH_CMD ]]; then
+        if [[ $INSTALL_CMD = "uncommon" || -z $INSTALL_CMD ]]; then
             echo -e "[\e[0;31m FAIL \e[0m]"
             echo-mls "\nIt looks like you're on an uncommon distribution, which the automatic \
                 installer in this script doesn't support (yet). So go ahead and install the \
@@ -101,6 +102,20 @@ if [[ $(whoami) != "root" ]]; then
     exit 1
 fi
 
+# Re-running this script works, but update.sh is the lighter path for an
+# existing install: it skips the permission setup and the reboot.
+if [[ -f /usr/bin/linux-3-finger-drag ]]; then
+    echo-mls "\n\e[0;33mNote\e[0m: linux-3-finger-drag is already installed. To update it, \
+        run 'sudo ./update.sh' instead -- it rebuilds and restarts the program \
+        without touching your config or asking to reboot."
+    echo -n "Re-run the full install anyway? (y/N) "
+    read answer
+    if [[ $answer != [yY] ]]; then
+        exit 0
+    fi
+    echo
+fi
+
 # 1. Check if libinput dev library is installed
 if [[ $1 != "$LIBINPUT_INSTALLED_FLAG" ]]; then
     echo -ne "Verifying prerequisites...                      "
@@ -131,6 +146,12 @@ mkdir -p /etc/udev/rules.d   # make if not already extant
 cp ./60-uinput.rules /etc/udev/rules.d/
 
 ## Add user to "input" group to read libinput debug events
+## (remember whether that's new, since only then is a reboot needed)
+if id -nG "$SUDO_USER" | tr ' ' '\n' | grep -qx input; then
+    NEEDS_REBOOT=0
+else
+    NEEDS_REBOOT=1
+fi
 gpasswd --add $SUDO_USER input > /dev/null
 
 ## Automatically load uinput kernel module
@@ -139,6 +160,10 @@ gpasswd --add $SUDO_USER input > /dev/null
 ## and does no harm on other distros
 echo "uinput" > /etc/modules-load.d/uinput.conf
 modprobe uinput
+
+## Apply the udev rule to /dev/uinput now, rather than at the next boot
+udevadm control --reload-rules > /dev/null 2>&1
+udevadm trigger --sysname-match=uinput > /dev/null 2>&1
 
 echo -e "[\e[0;32m DONE \e[0m]"
 
@@ -165,22 +190,15 @@ echo
 
 
 # 5. Install to /usr/bin
-# If you're getting permission issues (after a reboot), try setting the 
-# setuid bit, so it will execute as root, by running
-#     
-#     chmod u+s /usr/bin/linux-3-finger-drag 
-#
-# You can also change its owner to root by a simple:
-#
-#     chown root:root /usr/bin/linux-3-finger-drag
-# 
-# Neither of these are preferred security-wise (unless you trust my program), 
-# but it should solve the issue.
 echo -n "Installing binary to /usr/bin...                "
 
-# with the user added to the 'input' group, root does not need to
-# own the executable, and stick to the principle of least privilege.
-ERR_MSG=$(cp --preserve=ownership ./target/release/linux-3-finger-drag /usr/bin/ 2>&1)
+# The program runs as whoever starts it (you, via the user service), not
+# as the file's owner, so a root-owned binary isn't more privileged -- it
+# just can't be modified without root, like everything else in /usr/bin.
+# `install` also removes the old file before writing the new one, so it
+# works while an older version is still running (`cp` would fail with
+# "Text file busy").
+ERR_MSG=$(install -m 755 ./target/release/linux-3-finger-drag /usr/bin/ 2>&1)
 if [[ -n $ERR_MSG ]]; then
     echo -e "[\e[0;33m WARN \e[0m]"
     echo -e "\e[0;33mWarning\e[0m: Could not install binary to /usr/bin:"
@@ -192,12 +210,18 @@ fi
 
 
 # Set up config file
-# Has to be done as non-root user, so the file is accessible to the user
+# Has to be done as non-root user, so the file is accessible to the user.
+# An existing config is kept, so re-running this doesn't wipe your settings.
 echo -n "Installing config file...                       "
-su $SUDO_USER -c '\
-    mkdir -p ~/.config/linux-3-finger-drag; \
-    cp 3fd-config.json ~/.config/linux-3-finger-drag '
-echo -e "[\e[0;32m DONE \e[0m]"
+if su $SUDO_USER -c '[[ -f ~/.config/linux-3-finger-drag/3fd-config.json ]]'; then
+    echo -e "[\e[0;33m SKIP \e[0m]"
+    echo "    Kept your existing config."
+else
+    su $SUDO_USER -c '\
+        mkdir -p ~/.config/linux-3-finger-drag; \
+        cp 3fd-config.json ~/.config/linux-3-finger-drag '
+    echo -e "[\e[0;32m DONE \e[0m]"
+fi
 
 
 # (7a. KDE Autostart needs to be configured through GUI)
@@ -208,11 +232,16 @@ echo -n "Installing/enabling SystemD user unit...        "
 if [[ -n $(ps -p 1 | grep systemd) ]]; then
 
     # define user-level service
-    # made as non-root user
-    su $SUDO_USER -c '\
-        mkdir -p $HOME/.config/systemd/user; \
-        cp three-finger-drag.service $HOME/.config/systemd/user/; \
-        systemctl --user enable --now three-finger-drag.service '
+    # made as non-root user. `restart` rather than `enable --now`, so a
+    # re-run picks up the new binary if the service was already running.
+    su $SUDO_USER -c "\
+        export XDG_RUNTIME_DIR=/run/user/$(id -u $SUDO_USER); \
+        mkdir -p \$HOME/.config/systemd/user; \
+        cp three-finger-drag.service \$HOME/.config/systemd/user/; \
+        systemctl --user daemon-reload; \
+        systemctl --user enable three-finger-drag.service; \
+        systemctl --user restart three-finger-drag.service "
+
     echo -e "[\e[0;32m DONE \e[0m]"
 
 else
@@ -229,6 +258,14 @@ else
 fi
 
 ## 6. Reboot
+## Only needed when the user was just added to the 'input' group
+if [[ $NEEDS_REBOOT -eq 0 ]]; then
+    echo
+    echo -e "\e[0;32mInstall complete!\e[0m You were already in the 'input' group, so no reboot is needed."
+    echo
+    exit 0
+fi
+
 echo
 echo "This installation requires a reboot to complete (for the group modification)."
 echo
