@@ -11,7 +11,7 @@ OS | Version | Desktop Enviroment | Verified
 **Fedora** | (kernel 6) | KDE | ❌
 **Ubuntu** | (kernel 7) | Gnome | ✅
 
-KDE Problem: can't disable kde's default 3 finger drag to switch workspaces
+KDE Problem: can't disable kde's default 3 finger drag to switch workspaces (see the [workaround for KDE Plasma](#for-kde-plasma-users))
 ---
 <sup>1</sup> Developed on this setup.
 
@@ -43,6 +43,8 @@ KDE Problem: can't disable kde's default 3 finger drag to switch workspaces
 - [Troubleshooting and tips](#troubleshooting-and-tips)
   - [``error: linking with `cc` failed: exit status: 1``](#error-linking-with-cc-failed-exit-status-1-during-compilation)
   - [Changing 3-finger gestures to 4-finger gestures](#changing-3-finger-gestures-to-4-finger-gestures)
+    - [For GNOME users](#for-gnome-users)
+    - [For KDE Plasma users](#for-kde-plasma-users)
     - [For libinput gestures](#for-libinput-gestures-if-needed)
     - [For other extensions](#for-other-extensionsprograms-like-wzmach)
 
@@ -319,6 +321,18 @@ systemctl --user enable --now three-finger-drag.service
 ```
 gsettings set org.gnome.desktop.peripherals.touchpad tap-and-drag false
 ```
+
+#### For KDE Plasma users
+
+KDE Plasma uses a three-finger sideways swipe to switch between virtual desktops, and it has no setting to turn that gesture off or change its finger count. So a sideways three-finger drag can switch you to another desktop in the middle of the drag.
+
+That gesture only does anything when there is more than one virtual desktop, though. The recommended workaround is to keep a **single virtual desktop**, and use **Activities** to organize your windows instead:
+
+1. Open System Settings and search for **Virtual Desktops**. Remove desktops until only one is left, then click Apply.
+2. Open the Activities switcher with `Meta+Q` and create an activity for each desktop you used to have.
+3. Switch between activities with `Meta+Tab` (`Meta+Shift+Tab` to go backwards).
+
+Like virtual desktops, each activity keeps its own set of windows, and it can also have its own wallpaper and widgets.
 
 #### For `libinput-gestures` (if needed)
 
