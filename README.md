@@ -9,11 +9,14 @@ OS | Version | Desktop Enviroment | Verified
 **Arch** | (kernel 6.15.4) | KDE | ✅
 **Fedora** | (kernel 6) | Gnome | ✅
 **Fedora** | (kernel 6) | KDE | ❌
+**Fedora** | 44 (kernel 7) | KDE Plasma 6 | ✅ <sup>2</sup>
 **Ubuntu** | (kernel 7) | Gnome | ✅
 
 KDE Problem: can't disable kde's default 3 finger drag to switch workspaces (see the [workaround for KDE Plasma](#for-kde-plasma-users))
 ---
 <sup>1</sup> Developed on this setup.
+
+<sup>2</sup> With the [Activities workaround](#for-kde-plasma-users) for Plasma's three-finger desktop switching.
 
 ## Contents
 
