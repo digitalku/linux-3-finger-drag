@@ -29,14 +29,15 @@ use super::super::init::config::Configuration;
 /// 
 /// `CancelMouseUp`: Cancel timer, and don't do anything else in the fork (await next signal)
 /// 
-/// `RestartTimer`: Restart timer by restarting the loop in the fork that starts with a timer
+/// `RestartTimer`: Restart timer by restarting the loop in the fork that starts with a timer.
+/// It carries the delay to use, so changes to `dragEndDelay` in the config apply right away.
 /// 
 /// `TerminateThread`: Terminate function running in fork
 #[derive(Debug)]
 pub enum ControlSignal {
     CancelTimer,      // currently not sent in practice, but could be without issue
     CancelMouseUp,
-    RestartTimer,     // these two end up being treated the same in practice,
+    RestartTimer(Duration),     // these two end up being treated the same in practice,
     TerminateThread
 }
 
@@ -183,7 +184,7 @@ impl GestureTranslator {
         }
 
         // default case
-        self.send_signal(ControlSignal::RestartTimer).await
+        self.send_signal(ControlSignal::RestartTimer(self.cfg.drag_end_delay)).await
     }
 
 

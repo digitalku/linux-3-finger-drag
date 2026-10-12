@@ -1,4 +1,5 @@
 use std::{
+    path::PathBuf,
     sync::{
         Arc, atomic::{AtomicBool, Ordering}
     }, time::SystemTime
@@ -20,8 +21,13 @@ use linux_3_finger_drag::{
 #[tokio::main]
 async fn main() -> Result<(), GtError> {
 
-    let cfg_file = config::get_config_file_path()?; 
-    let cfg_last_modified = std::fs::metadata(cfg_file)?.modified()?;
+    // The config file is optional, so neither a missing file nor an 
+    // unknown config directory should stop the program (they only 
+    // mean there's nothing to hot-reload).
+    let cfg_file = config::get_config_file_path().ok(); 
+    let cfg_last_modified = cfg_file
+        .as_deref()
+        .and_then(config::get_config_last_modified);
 
     let configs = config::init_cfg();
 
@@ -64,6 +70,7 @@ async fn main() -> Result<(), GtError> {
                 recvr, 
                 &should_exit, 
                 real_trackpad, 
+                cfg_file,
                 cfg_last_modified
             ).await
         },
@@ -89,23 +96,24 @@ async fn run_main_event_loop(
     recvr: Receiver<ControlSignal>,
     should_exit: &Arc<AtomicBool>,
     mut real_trackpad: input::Libinput, 
-    mut cfg_last_modified: SystemTime
+    cfg_file: Option<PathBuf>,
+    mut cfg_last_modified: Option<SystemTime>
     
 ) -> Result<(), GtError> {
 
     // spawn 1 separate thread to handle mouse_up_delay timeouts
+    // (the delay itself is sent along with each `RestartTimer` signal,
+    // so it stays in sync with the config when that is reloaded)
     debug!("Creating new thread to manage drag end timer");
     let mut vtp_clone = translator.vtp.clone();
-    let delay = translator.cfg.drag_end_delay;
 
     let fork_fn = async move {
-        vtp_clone.handle_mouse_up_timeout(delay, recvr)
+        vtp_clone.handle_mouse_up_timeout(recvr)
             .await
             .map_err(GtError::from)
     };
 
     let mouse_up_listener = tokio::spawn(fork_fn);
-    let cfg_file_path = config::get_config_file_path()?; 
 
     info!("linux-3-finger-drag started successfully!");
 
@@ -114,26 +122,21 @@ async fn run_main_event_loop(
         // entire CPU core, which it will do even on no-ops.
         std::thread::sleep(translator.cfg.response_time);
 
-        // check if the configuration was modified, and if so, update configs in memory
-        let cfg_last_modified_update = std::fs::metadata(&cfg_file_path)?.modified()?;
+        // check if the configuration was modified (or created), and if so, 
+        // update configs in memory. If the file is missing, keep the current
+        // configs: editors that save by replacing the file can make it 
+        // disappear for a moment, and that shouldn't reset everything.
+        // `!=` rather than `>`, since restoring an older copy of the file 
+        // is a change too.
+        if let Some(cfg_file) = &cfg_file {
+            let cfg_last_modified_update = config::get_config_last_modified(cfg_file);
 
-        if cfg_last_modified_update > cfg_last_modified {
+            if cfg_last_modified_update.is_some() 
+                && cfg_last_modified_update != cfg_last_modified {
 
-            let new_cfg = config::init_cfg();
-            translator.cfg = new_cfg.clone();
-
-            cfg_last_modified = cfg_last_modified_update;
-        }
-        
-        // check if the configuration was modified, and if so, update configs in memory
-        let cfg_last_modified_update = std::fs::metadata(&cfg_file_path)?.modified()?;
-
-        if cfg_last_modified_update > cfg_last_modified {
-
-            let new_cfg = config::init_cfg();
-            translator.cfg = new_cfg.clone();
-
-            cfg_last_modified = cfg_last_modified_update;
+                translator.cfg = config::init_cfg();
+                cfg_last_modified = cfg_last_modified_update;
+            }
         }
 
 

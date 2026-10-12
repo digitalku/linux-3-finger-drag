@@ -31,7 +31,12 @@ use crate::runtime::event_handler::ControlSignal::{self, *};
 /// that is copied during cloning, for simplicity. 
 pub struct VirtualTrackpad {
     handle: UInputHandle<File>,
-    pub mouse_is_down: bool
+    pub mouse_is_down: bool,
+
+    // sub-pixel motion left over from previous moves, carried 
+    // into the next one (see `mouse_move_relative()`)
+    rem_x: f64,
+    rem_y: f64
 }
 
 
@@ -88,7 +93,9 @@ pub fn start_handler() -> Result<VirtualTrackpad, std::io::Error> {
     Ok(
         VirtualTrackpad { 
             handle: uhandle, 
-            mouse_is_down: false
+            mouse_is_down: false,
+            rem_x: 0.0,
+            rem_y: 0.0
         }
     )
 
@@ -148,7 +155,9 @@ impl Clone for VirtualTrackpad {
 
         VirtualTrackpad {
             handle: UInputHandle::new(File::from(uinput_fd)),
-            mouse_is_down: self.mouse_is_down
+            mouse_is_down: self.mouse_is_down,
+            rem_x: self.rem_x,
+            rem_y: self.rem_y
         }
     }
 }
@@ -175,6 +184,10 @@ impl VirtualTrackpad
         ];
         self.handle.write(&events)?;
         self.mouse_is_down = true;
+
+        // a new drag shouldn't inherit leftover motion from the last one
+        self.rem_x = 0.0;
+        self.rem_y = 0.0;
         Ok(())
     }
 
@@ -208,7 +221,7 @@ impl VirtualTrackpad
     /// thread will not panic, and will not stop unless either it's 
     /// sent a `ControlSignal::TerminateThread`, or an error was 
     /// raised. So if it ends prematurely, it's because of an error.
-    pub async fn handle_mouse_up_timeout(&mut self, delay: Duration, mut rx: Receiver<ControlSignal>) -> Result<(), std::io::Error> {
+    pub async fn handle_mouse_up_timeout(&mut self, mut rx: Receiver<ControlSignal>) -> Result<(), std::io::Error> {
         
         loop {
             trace!("awaiting signal in handle_mouse_up_timeout...");
@@ -219,8 +232,8 @@ impl VirtualTrackpad
             debug!("sig recv'd in outer loop: {:?}", ctl_sig);
 
             // handle signals received during outer loop
-            match ctl_sig {
-                RestartTimer  => {},        // proceed to timer
+            let delay = match ctl_sig {
+                RestartTimer(delay) => delay,   // proceed to timer
                 CancelTimer => {
                     trace!("Setting mouse up now");
                     self.mouse_up()?;
@@ -228,7 +241,7 @@ impl VirtualTrackpad
                 },
                 CancelMouseUp => continue,  // don't do anything this iteration
                 TerminateThread => break
-            }
+            };
 
             // handle signals received during timer loop
             // that can't be handled within that scope
@@ -280,30 +293,32 @@ impl VirtualTrackpad
     }
 
 
-    pub fn mouse_move_relative(&self, x_rel: f64, y_rel:f64) -> Result<(), std::io::Error> {
+    pub fn mouse_move_relative(&mut self, x_rel: f64, y_rel:f64) -> Result<(), std::io::Error> {
         
-        // RelativeEvent::new() can only take integers, 
-        // so some precision must be lost. But this needs to be done 
-        // without bias, since x_rel and y_rel can be negative:
-        // so we truncate the values down (floor()) if they are positive,
-        // and truncate them up (ceil()) if they are negative.
-        // That way, they are truncated toward 0 regardless.
-        // 
-        // Why does this matter? Because it prevents the effect of the 
-        // origin (from which relative motion is calculated) seeming to 
-        // drift up or down the trackpad instead of staying where the 
-        // three finger drag started.
-        let x_rel_int = if x_rel > 0.0 {
-            x_rel.floor() as i32
-        } else {
-            x_rel.ceil() as i32
-        };
+        // RelativeEvent::new() can only take integers, but libinput 
+        // gives us fractional deltas. Simply truncating each delta 
+        // throws away the fractional part on every event, so slow 
+        // drags (where each delta is under 1px) never move the cursor 
+        // at all. Instead, the fractional part is kept and added to the 
+        // next delta, so all motion eventually makes it to the cursor. 
+        // Truncating toward 0 (trunc()) keeps this unbiased in both 
+        // directions, so the cursor doesn't drift.
+        self.rem_x += x_rel;
+        self.rem_y += y_rel;
 
-        let y_rel_int = if y_rel > 0.0 {
-            y_rel.floor() as i32
-        } else {
-            y_rel.ceil() as i32
-        };
+        let x_rel_whole = self.rem_x.trunc();
+        let y_rel_whole = self.rem_y.trunc();
+
+        self.rem_x -= x_rel_whole;
+        self.rem_y -= y_rel_whole;
+
+        // nothing to report until at least a whole pixel has built up
+        if x_rel_whole == 0.0 && y_rel_whole == 0.0 {
+            return Ok(());
+        }
+
+        let x_rel_int = x_rel_whole as i32;
+        let y_rel_int = y_rel_whole as i32;
 
         let events = [
             InputEvent::from(
@@ -332,8 +347,8 @@ impl VirtualTrackpad
 
     /// A timer that can be cancelled or reset via a signal in the channel. The return value
     /// is what signal was received, if any, except for `RestartTimer`, since it can be handled 
-    /// within the function.
-    async fn run_timer(&self, delay: Duration, rx: &mut Receiver<ControlSignal>) -> Option<ControlSignal> {
+    /// within the function (restarting with the delay it carries).
+    async fn run_timer(&self, mut delay: Duration, rx: &mut Receiver<ControlSignal>) -> Option<ControlSignal> {
         loop {
             // catches the output of the function that returns first
             let signal = plain_timeout(delay)
@@ -341,7 +356,10 @@ impl VirtualTrackpad
                 .await?;
             
             match signal {
-                RestartTimer => continue,  
+                RestartTimer(new_delay) => {
+                    delay = new_delay;
+                    continue
+                },
                 // function exits, lets the outer loop handle the other signals
                 // covers `CancelTimer` arm, since the behavior would be identical
                 _ => return Some(signal), 

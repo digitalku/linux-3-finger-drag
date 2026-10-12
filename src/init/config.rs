@@ -4,7 +4,7 @@ use serde_with::serde_as;
 use std::{
     fs::{File, read_to_string, OpenOptions}, 
     io::ErrorKind, 
-    path::PathBuf, time::Duration
+    path::{Path, PathBuf}, time::{Duration, SystemTime}
 };
 
 use tracing_subscriber::{
@@ -102,6 +102,16 @@ pub fn get_config_file_path() -> Result<PathBuf, std::io::Error> {
     };
     let filepath = config_folder.join("linux-3-finger-drag/3fd-config.json");
     Ok(filepath)
+}
+
+
+/// When the config file was last modified, or `None` if it doesn't 
+/// exist (or can't be read). Since the config file is optional, its 
+/// absence is not an error.
+pub fn get_config_last_modified(filepath: &Path) -> Option<SystemTime> {
+    std::fs::metadata(filepath)
+        .and_then(|meta| meta.modified())
+        .ok()
 }
 
 

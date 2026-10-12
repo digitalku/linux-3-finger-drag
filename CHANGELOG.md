@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Fix slow drags not moving the cursor: sub-pixel motion is now carried over to the next event instead of being dropped
+- Fix crash on startup (or while running) when the config file doesn't exist, or is briefly missing while being saved
+- Fix hot-reloaded `dragEndDelay` values being ignored until restart
+
 ## 1.6.0 - 2025-11-24
 
 ### Fixed
