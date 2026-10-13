@@ -5,6 +5,7 @@
 ### Added
 
 - Add `update.sh` to update an existing install: pulls, rebuilds, swaps the binary and restarts the service, without touching the config or needing a reboot
+- Only one instance can run per user: a second one (e.g. from both KDE Autostart and the systemd unit) exits with an "already running" error instead of creating a second virtual trackpad
 
 ### Changed
 
@@ -24,6 +25,7 @@
 - Fix crash on startup (or while running) when the config file doesn't exist, or is briefly missing while being saved
 - Fix hot-reloaded `dragEndDelay` values being ignored until restart
 - Fix the libinput device open check, which could never detect read-only (`O_RDONLY`) access
+- Fix the touchpad's "disable while mouse is connected" setting always switching the touchpad off: the virtual trackpad is now registered on a virtual bus instead of USB, so libinput no longer counts it as an external mouse
 
 ## 1.6.0 - 2025-11-24
 

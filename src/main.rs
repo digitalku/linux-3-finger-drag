@@ -10,7 +10,7 @@ use tracing::{debug, error, info, trace};
 use tracing_subscriber::fmt::time::ChronoLocal;
 
 use linux_3_finger_drag::{
-    init::{config, libinput_init},
+    init::{config, instance_lock, libinput_init},
     runtime::{
         event_handler::{ControlSignal, GestureTranslator, GtError}, 
         virtual_trackpad
@@ -42,6 +42,9 @@ async fn main() -> Result<(), GtError> {
         }
     };
     println!("[PRE-LOG: INFO]: Logger initialized!"); 
+
+    // held until main() returns; the kernel releases it on exit
+    let _instance_lock = instance_lock::acquire()?;
 
     // handling SIGINT and SIGTERM
     let should_exit = Arc::new(AtomicBool::new(false));

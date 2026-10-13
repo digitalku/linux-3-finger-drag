@@ -154,6 +154,10 @@ sudo install -m 755 ./target/release/linux-3-finger-drag /usr/bin
 A reboot is required to update all the permissions needed for the program to run. You can also do a soft reboot, which will serve the same purpose, with `systemctl soft-reboot` (for systemd users, of course). 
 
 ### 7. Add program to Autostart (KDE only)
+
+> [!IMPORTANT]
+> Steps 7 and 7b are two different ways to do the same thing. **Pick one, not both.** If the program is started from both, only the first one to start will run (the other exits with an "already running" error), but the duplicate entry is still worth removing. If you used `install.sh` on a systemd-based distro, the unit from step 7b is already set up, so skip this step.
+
 This is a part of the graphical interface. You can find the Autostart menu in System Settings > Autostart (near the bottom). Once there, click the "+ Add..." button in the upper right of the window, and select "Add Application" from the dropdown menu. Then, in text bar in the window that pops up, paste
 ```
 /usr/bin/linux-3-finger-drag

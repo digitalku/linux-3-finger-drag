@@ -2,6 +2,7 @@
 name = "linux-3-finger-drag"
 version = "1.6.0"
 edition = "2021"
+rust-version = "1.89"
 
 [dependencies]
 input-linux = "0.7.1"
