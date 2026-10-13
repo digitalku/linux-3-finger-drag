@@ -130,8 +130,11 @@ pub fn start_handler() -> Result<VirtualTrackpad, std::io::Error> {
     uhandle.set_relbit(RelativeAxis::X)?;
     uhandle.set_relbit(RelativeAxis::Y)?;
 
+    // libinput tags any USB or Bluetooth pointer as an external mouse,
+    // which would trip the touchpad's "disable while mouse is connected"
+    // setting for as long as this program runs. BUS_VIRTUAL doesn't.
     let input_id = InputId {
-        bustype: input_linux::sys::BUS_USB,
+        bustype: input_linux::sys::BUS_VIRTUAL,
         vendor: 0x1234,
         product: 0x5678,  // iykyk
         version: 0,
